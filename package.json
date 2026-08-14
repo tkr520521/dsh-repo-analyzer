@@ -1,7 +1,7 @@
 {
   "name": "dsh-repo-analyzer",
   "version": "0.1.0",
-  "description": "Local repository intelligence for DeepSeek Harness: stack detection, dependency maps, and module-reference analysis — no extra services, everything runs on your filesystem.",
+  "description": "Local repository intelligence for DeepSeek Harness: stack detection, dependency maps, and module-reference analysis 鈥?no extra services, everything runs on your filesystem.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -24,7 +24,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "test": "node --test test/*.test.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

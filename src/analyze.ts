@@ -60,7 +60,7 @@ export function detectStack(files: ScannedFile[]): Array<{ name: string; evidenc
 }
 
 /** Parse a package.json manifest into a flat dependency list. */
-function parsePackageJson(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
+export function parsePackageJson(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
   let json: Record<string, Record<string, string>> = {}
   try {
     json = JSON.parse(content) as Record<string, Record<string, string>>
@@ -74,29 +74,66 @@ function parsePackageJson(content: string): { deps: ManifestDep[]; devDeps: Mani
   return { deps: toDeps(json.dependencies), devDeps: toDeps(json.devDependencies) }
 }
 
+/** True when a pyproject section name denotes non-runtime dependencies. */
+function isDevSection(current: string): boolean {
+  return current.includes('optional-dependencies') || current.includes('dev') || current.includes('test')
+}
+
 /** Parse a pyproject.toml dependency block (heuristic TOML subset). */
-function parsePyproject(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
+export function parsePyproject(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
   const deps: ManifestDep[] = []
   const devDeps: ManifestDep[] = []
   const sectionRe = /^\[([^\]]+)\]/gm
   let current = 'project'
+  let pendingArray: 'deps' | 'devDeps' | null = null
+  const push = (name: string, version: string): void => {
+    const target = isDevSection(current) ? devDeps : deps
+    target.push({ name, version })
+  }
+  const collectItem = (version: string): void => {
+    const name = version.split(/[<>=!~[]/)[0].trim()
+    ;(pendingArray === 'devDeps' ? devDeps : deps).push({ name, version })
+  }
   for (const line of content.split(/\r?\n/)) {
     const section = sectionRe.exec(line)
     if (section) {
       current = section[1]
+      pendingArray = null
       continue
     }
-    const m = /^["']?([A-Za-z0-9_.-]+)["']?\s*[=:]\s*["']?([^"'#]+)/.exec(line.trim())
+    const trimmed = line.trim()
+    if (pendingArray) {
+      const item = /^["']([^"']+)["'],?\s*$/.exec(trimmed)
+      if (item) collectItem(item[1])
+      if (trimmed.includes(']')) pendingArray = null
+      continue
+    }
+    const singleLineArray = /^([A-Za-z0-9_.-]+)\s*=\s*\[([^\]]*)\]/.exec(trimmed)
+    if (singleLineArray) {
+      const key = singleLineArray[1]
+      pendingArray = isDevSection(current) || key === 'dev' || key === 'test' ? 'devDeps' : 'deps'
+      const inner = singleLineArray[2].trim()
+      const item = inner ? /^["']([^"']+)["']/.exec(inner) : null
+      if (item) collectItem(item[1])
+      pendingArray = null
+      continue
+    }
+    const arrayStart = /^([A-Za-z0-9_.-]+)\s*=\s*\[/.exec(trimmed)
+    if (arrayStart) {
+      const key = arrayStart[1]
+      pendingArray = isDevSection(current) || key === 'dev' || key === 'test' ? 'devDeps' : 'deps'
+      continue
+    }
+    const m = /^["']?([A-Za-z0-9_.-]+)["']?\s*[=:]\s*["']?([^"'#]+)/.exec(trimmed)
     if (!m) continue
     const [, name, version] = m
-    if (current === 'project' || current.includes('dependencies')) deps.push({ name, version: version.trim() })
-    if (current.includes('optional-dependencies') || current.includes('dev')) devDeps.push({ name, version: version.trim() })
+    push(name, version.trim())
   }
   return { deps, devDeps }
 }
 
 /** Parse a go.mod require block. */
-function parseGoMod(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
+export function parseGoMod(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
   const deps: ManifestDep[] = []
   const devDeps: ManifestDep[] = []
   for (const line of content.split(/\r?\n/)) {
@@ -111,7 +148,7 @@ function parseGoMod(content: string): { deps: ManifestDep[]; devDeps: ManifestDe
 }
 
 /** Parse a Cargo.toml dependency block (heuristic subset). */
-function parseCargo(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
+export function parseCargo(content: string): { deps: ManifestDep[]; devDeps: ManifestDep[] } {
   const deps: ManifestDep[] = []
   const devDeps: ManifestDep[] = []
   let current = 'dependencies'
