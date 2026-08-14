@@ -1,0 +1,11 @@
+# dsh-repo-analyzer bundle patch — installs the plugin as one more row over
+# the active profile. Install with:
+#   dsh plugin --profile <name> add dsh-repo-analyzer
+- insert:
+    - id: dsh-repo-analyzer
+      name: dsh-repo-analyzer
+      config:
+        root: '.'
+        maxDepth: 4
+        maxFiles: 20000
+        maxFileBytes: 1048576
